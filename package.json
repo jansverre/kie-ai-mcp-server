@@ -1,7 +1,7 @@
 {
-  "name": "@andrewlwn77/kie-ai-mcp-server",
-  "version": "1.0.2",
-  "description": "MCP server for Kie.ai APIs (Nano Banana image generation/editing and Veo3 video generation)",
+  "name": "@jansverre/kie-ai-mcp-server-extended",
+  "version": "2.0.0",
+  "description": "Extended MCP server for Kie.ai APIs with auto-download, Sora 2, Veo 3.1, Runway, and more",
   "main": "dist/index.js",
   "bin": {
     "kie-ai-mcp-server": "dist/index.js"
@@ -22,17 +22,21 @@
     "video-generation",
     "nano-banana",
     "veo3",
+    "veo3.1",
+    "sora-2",
+    "runway",
+    "auto-download",
     "model-context-protocol"
   ],
-  "author": "andrewlwn77",
+  "author": "jansverre (based on original work by andrewlwn77)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrewlwn77/kie-ai-mcp-server.git"
+    "url": "git+https://github.com/jansverre/kie-ai-mcp-server.git"
   },
-  "homepage": "https://github.com/andrewlwn77/kie-ai-mcp-server#readme",
+  "homepage": "https://github.com/jansverre/kie-ai-mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/andrewlwn77/kie-ai-mcp-server/issues"
+    "url": "https://github.com/jansverre/kie-ai-mcp-server/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",

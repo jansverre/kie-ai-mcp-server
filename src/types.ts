@@ -21,10 +21,22 @@ export const Veo3GenerateSchema = z.object({
   enableFallback: z.boolean().default(false)
 });
 
+export const Sora2GenerateSchema = z.object({
+  prompt: z.string().min(1).max(2000),
+  image_urls: z.array(z.string().url()).max(1).optional(),
+  model: z.enum(['sora-2-text-to-video', 'sora-2-image-to-video', 'sora-2-pro-text-to-video', 'sora-2-pro-image-to-video']).default('sora-2-text-to-video'),
+  aspect_ratio: z.enum(['portrait', 'landscape']).default('landscape'),
+  n_frames: z.enum(['10s', '15s']).default('10s'),
+  size: z.enum(['standard', 'high']).optional(),
+  remove_watermark: z.boolean().default(false),
+  callBackUrl: z.string().url().optional()
+});
+
 // TypeScript types
 export type NanoBananaGenerateRequest = z.infer<typeof NanoBananaGenerateSchema>;
 export type NanaBananaEditRequest = z.infer<typeof NanoBananaEditSchema>;
 export type Veo3GenerateRequest = z.infer<typeof Veo3GenerateSchema>;
+export type Sora2GenerateRequest = z.infer<typeof Sora2GenerateSchema>;
 
 export interface KieAiResponse<T = any> {
   code: number;
@@ -44,7 +56,7 @@ export interface TaskResponse {
 export interface TaskRecord {
   id?: number;
   task_id: string;
-  api_type: 'nano-banana' | 'nano-banana-edit' | 'veo3';
+  api_type: 'nano-banana' | 'nano-banana-edit' | 'veo3' | 'sora2';
   status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;

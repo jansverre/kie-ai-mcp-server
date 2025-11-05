@@ -11,17 +11,20 @@ import {
 
 import { KieAiClient } from './kie-ai-client.js';
 import { TaskDatabase } from './database.js';
-import { 
+import { Downloader } from './downloader.js';
+import {
   NanoBananaGenerateSchema,
-  NanoBananaEditSchema, 
+  NanoBananaEditSchema,
   Veo3GenerateSchema,
-  KieAiConfig 
+  Sora2GenerateSchema,
+  KieAiConfig
 } from './types.js';
 
 class KieAiMcpServer {
   private server: Server;
   private client: KieAiClient;
   private db: TaskDatabase;
+  private downloader: Downloader;
 
   constructor() {
     this.server = new Server({
@@ -42,6 +45,12 @@ class KieAiMcpServer {
 
     this.client = new KieAiClient(config);
     this.db = new TaskDatabase(process.env.KIE_AI_DB_PATH);
+
+    // Initialize downloader with auto-download config
+    this.downloader = new Downloader({
+      downloadDir: process.env.KIE_AI_DOWNLOAD_DIR,
+      autoDownload: process.env.KIE_AI_AUTO_DOWNLOAD !== 'false' // Enabled by default
+    });
 
     this.setupHandlers();
   }
@@ -140,6 +149,56 @@ class KieAiMcpServer {
             }
           },
           {
+            name: 'generate_sora2_video',
+            description: 'Generate videos using OpenAI\'s Sora 2 API (text-to-video or image-to-video)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                prompt: {
+                  type: 'string',
+                  description: 'Text prompt describing desired video content',
+                  minLength: 1,
+                  maxLength: 2000
+                },
+                image_urls: {
+                  type: 'array',
+                  description: 'Image URLs for image-to-video generation (max 1)',
+                  items: { type: 'string', format: 'uri' },
+                  maxItems: 1
+                },
+                model: {
+                  type: 'string',
+                  enum: ['sora-2-text-to-video', 'sora-2-image-to-video', 'sora-2-pro-text-to-video', 'sora-2-pro-image-to-video'],
+                  description: 'Model variant: standard or pro, text-to-video or image-to-video',
+                  default: 'sora-2-text-to-video'
+                },
+                aspect_ratio: {
+                  type: 'string',
+                  enum: ['portrait', 'landscape'],
+                  description: 'Video aspect ratio',
+                  default: 'landscape'
+                },
+                n_frames: {
+                  type: 'string',
+                  enum: ['10s', '15s'],
+                  description: 'Video duration',
+                  default: '10s'
+                },
+                size: {
+                  type: 'string',
+                  enum: ['standard', 'high'],
+                  description: 'Video quality (Pro models only)',
+                },
+                remove_watermark: {
+                  type: 'boolean',
+                  description: 'Remove watermark from output',
+                  default: false
+                }
+              },
+              required: ['prompt']
+            }
+          },
+          {
             name: 'get_task_status',
             description: 'Get the status of a generation task',
             inputSchema: {
@@ -203,22 +262,25 @@ class KieAiMcpServer {
         switch (name) {
           case 'generate_nano_banana':
             return await this.handleGenerateNanoBanana(args);
-          
+
           case 'edit_nano_banana':
             return await this.handleEditNanoBanana(args);
-          
+
           case 'generate_veo3_video':
             return await this.handleGenerateVeo3Video(args);
-          
+
+          case 'generate_sora2_video':
+            return await this.handleGenerateSora2Video(args);
+
           case 'get_task_status':
             return await this.handleGetTaskStatus(args);
-          
+
           case 'list_tasks':
             return await this.handleListTasks(args);
-          
+
           case 'get_veo3_1080p_video':
             return await this.handleGetVeo1080pVideo(args);
-          
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -324,10 +386,10 @@ class KieAiMcpServer {
 
   private async handleGenerateVeo3Video(args: any) {
     const request = Veo3GenerateSchema.parse(args);
-    
+
     try {
       const response = await this.client.generateVeo3Video(request);
-      
+
       if (response.data?.taskId) {
         await this.db.createTask({
           task_id: response.data.taskId,
@@ -335,7 +397,7 @@ class KieAiMcpServer {
           status: 'pending'
         });
       }
-      
+
       return {
         content: [
           {
@@ -365,16 +427,59 @@ class KieAiMcpServer {
     }
   }
 
+  private async handleGenerateSora2Video(args: any) {
+    const request = Sora2GenerateSchema.parse(args);
+
+    try {
+      const response = await this.client.generateSora2Video(request);
+
+      if (response.data?.taskId) {
+        await this.db.createTask({
+          task_id: response.data.taskId,
+          api_type: 'sora2',
+          status: 'pending'
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              task_id: response.data?.taskId,
+              message: 'Sora 2 video generation task created successfully',
+              note: 'Use get_task_status to check progress'
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Video generation failed';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: message
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
   private async handleGetTaskStatus(args: any) {
     const { task_id } = args;
-    
+
     if (!task_id || typeof task_id !== 'string') {
       throw new McpError(ErrorCode.InvalidParams, 'task_id is required and must be a string');
     }
-    
+
     try {
       const localTask = await this.db.getTask(task_id);
-      
+
       // Always try to get updated status from API, passing api_type if available
       let apiResponse = null;
       try {
@@ -382,7 +487,28 @@ class KieAiMcpServer {
       } catch (error) {
         // API call failed, use local data if available
       }
-      
+
+      // Auto-download if task is completed and has result URLs
+      let downloadedFiles: string[] = [];
+      if (apiResponse?.data?.successFlag === 1 && apiResponse?.data?.resultUrls) {
+        const resultUrls = apiResponse.data.resultUrls;
+        const fileType = localTask?.api_type?.includes('nano-banana') ? 'image' : 'video';
+
+        downloadedFiles = await this.downloader.downloadMultipleFiles(
+          resultUrls,
+          task_id,
+          fileType
+        );
+
+        // Update local task status
+        if (localTask) {
+          await this.db.updateTask(task_id, {
+            status: 'completed',
+            result_url: resultUrls[0]
+          });
+        }
+      }
+
       return {
         content: [
           {
@@ -391,6 +517,7 @@ class KieAiMcpServer {
               success: true,
               local_task: localTask,
               api_response: apiResponse,
+              downloaded_files: downloadedFiles.length > 0 ? downloadedFiles : undefined,
               message: localTask ? 'Task found' : 'Task not found in local database'
             }, null, 2)
           }

@@ -1,11 +1,12 @@
-import { 
-  KieAiConfig, 
-  KieAiResponse, 
-  NanoBananaGenerateRequest, 
+import {
+  KieAiConfig,
+  KieAiResponse,
+  NanoBananaGenerateRequest,
   NanaBananaEditRequest,
   Veo3GenerateRequest,
+  Sora2GenerateRequest,
   ImageResponse,
-  TaskResponse 
+  TaskResponse
 } from './types.js';
 
 export class KieAiClient {
@@ -79,14 +80,31 @@ export class KieAiClient {
     return this.makeRequest<TaskResponse>('/veo/generate', 'POST', request);
   }
 
+  async generateSora2Video(request: Sora2GenerateRequest): Promise<KieAiResponse<TaskResponse>> {
+    // Use playground endpoint like Nano Banana
+    const playgroundRequest = {
+      model: request.model,
+      input: {
+        prompt: request.prompt,
+        image_urls: request.image_urls,
+        aspect_ratio: request.aspect_ratio,
+        n_frames: request.n_frames,
+        size: request.size,
+        remove_watermark: request.remove_watermark,
+        callBackUrl: request.callBackUrl
+      }
+    };
+    return this.makeRequest<TaskResponse>('/playground/createTask', 'POST', playgroundRequest);
+  }
+
   async getTaskStatus(taskId: string, apiType?: string): Promise<KieAiResponse<any>> {
     // Use api_type to determine correct endpoint, with fallback strategy
     if (apiType === 'veo3') {
       return this.makeRequest<any>(`/veo/record-info?taskId=${taskId}`, 'GET');
-    } else if (apiType === 'nano-banana' || apiType === 'nano-banana-edit') {
+    } else if (apiType === 'nano-banana' || apiType === 'nano-banana-edit' || apiType === 'sora2') {
       return this.makeRequest<any>(`/playground/recordInfo?taskId=${taskId}`, 'GET');
     }
-    
+
     // Fallback: try playground first, then veo (for tasks not in database)
     try {
       return await this.makeRequest<any>(`/playground/recordInfo?taskId=${taskId}`, 'GET');
